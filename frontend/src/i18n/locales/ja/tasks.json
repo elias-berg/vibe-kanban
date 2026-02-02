@@ -571,9 +571,12 @@
   },
   "restoreLogsDialog": {
     "title": "リトライを確認",
+    "titleReset": "リセットを確認",
     "historyChange": {
       "title": "履歴の変更",
       "willDelete": "このプロセスを削除します",
+      "willDeleteProcesses_one": "{{count}}件のプロセスを削除します",
+      "willDeleteProcesses_other": "{{count}}件のプロセスを削除します",
       "andLaterProcesses_one": "および後続の{{count}}件のプロセス",
       "andLaterProcesses_other": "および後続の{{count}}件のプロセス",
       "fromHistory": "を履歴から削除します。",
@@ -609,7 +612,8 @@
       "uncommittedPresentHint": "未コミットの変更があります。強制リセットをオンにするか、コミット/スタッシュしてから続行してください。"
     },
     "buttons": {
-      "retry": "リトライ"
+      "retry": "リトライ",
+      "reset": "リセット"
     }
   },
   "conversation": {
@@ -640,7 +644,9 @@
       "approve": "承認",
       "clearReviewComments": "レビューコメントをクリア",
       "edit": "メッセージを編集",
-      "scrollToPreviousMessage": "Go to previous message"
+      "scrollToPreviousMessage": "Go to previous message",
+      "reset": "リセット",
+      "resetTooltip": "この時点にリセット"
     },
     "approval": {
       "conflictWarning": "競合するファイルは手動で解決する必要があります",
