@@ -17,10 +17,11 @@ env:
   CARGO_TERM_COLOR: always
   NODE_VERSION: 22
   PNPM_VERSION: 10.13.1
+  RUNNER_LABEL: &runner_label blacksmith-16vcpu-ubuntu-2404
 
 jobs:
   frontend-test:
-    runs-on: ubuntu-latest-arm64-l
+    runs-on: *runner_label
     steps:
       - uses: actions/checkout@v6
 
@@ -31,20 +32,21 @@ jobs:
         run: pnpm install
 
       - name: Run checks
-        run: |
-          (cd frontend && npm run lint) &
-          (GITHUB_BASE_REF=${{ github.base_ref || 'main' }} ./scripts/check-i18n.sh) &
-          (cd frontend && npm run format:check) &
-          (cd frontend && npx tsc --noEmit) &
-          wait
-
-      - name: Build frontend
-        run: cd frontend && npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=8192
+        run: |
+          set -x
+          (cd frontend && npm run lint) & pid_lint=$!
+          (GITHUB_BASE_REF=${{ github.base_ref || 'main' }} ./scripts/check-i18n.sh) & pid_i18n=$!
+          (cd frontend && npm run format:check) & pid_fmt=$!
+          (cd frontend && npm run build) & pid_build=$!
+          wait $pid_lint
+          wait $pid_i18n
+          wait $pid_fmt
+          wait $pid_build
 
-  backend-quality:
-    runs-on: ubuntu-latest-arm64-l
+  backend-schema-checks:
+    runs-on: *runner_label
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
@@ -61,7 +63,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: nightly-2025-12-04
-          components: rustfmt, clippy
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -71,7 +72,7 @@ jobs:
           workspaces: "."
           cache-provider: "github"
           cache-on-failure: true
-          shared-key: "shared-${{ runner.os }}-${{ runner.arch }}"
+          shared-key: "shared-${{ runner.os }}-${{ runner.arch }}-${{ env.RUNNER_LABEL }}"
           cache-all-crates: true
 
       - name: Setup SSH Agent for private dependencies
@@ -90,20 +91,56 @@ jobs:
 
       - name: Checks
         run: |
-          (cargo fmt --all -- --check) &
-          cargo run --bin generate_types -- --check
-          node scripts/prepare-db.js --check
-          cargo clippy --all --all-targets -- -D warnings
-          wait
+          set -x
+          npm run generate-types:check & pid_types=$!
+          npm run prepare-db:check
+          wait $pid_types
 
       - name: Remote crate checks
         if: ${{ steps.ssh-setup.outcome == 'success' }}
         run: |
-          npm run remote:generate-types:check
+          set -x
+          npm run remote:generate-types:check & pid_types=$!
           npm run remote:prepare-db:check
+          wait $pid_types
+
+  backend-clippy:
+    runs-on: *runner_label
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup sccache
+        uses: BloopAI/sccache-action@main
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly-2025-12-04
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        env:
+          RUST_CACHE_DEBUG: true
+        with:
+          workspaces: "."
+          cache-provider: "github"
+          cache-on-failure: true
+          shared-key: "shared-${{ runner.os }}-${{ runner.arch }}-${{ env.RUNNER_LABEL }}"
+          cache-all-crates: true
+
+      - name: Run Checks
+        run: |
+          set -x
+          cargo fmt --all -- --check & pid_fmt=$!
+          cargo clippy --all --all-targets -- -D warnings
+          wait $pid_fmt
 
   backend-test:
-    runs-on: ubuntu-latest-arm64-l
+    runs-on: *runner_label
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
@@ -130,7 +167,7 @@ jobs:
           workspaces: "."
           cache-provider: "github"
           cache-on-failure: true
-          shared-key: "shared-${{ runner.os }}-${{ runner.arch }}"
+          shared-key: "shared-${{ runner.os }}-${{ runner.arch }}-${{ env.RUNNER_LABEL }}"
           cache-all-crates: true
 
       - name: Install cargo-nextest
